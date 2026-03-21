@@ -27,6 +27,7 @@ As you implement, organize code around clear boundaries:
 
 - `interfaces/`: command definitions, message schemas, protocol adapters
 - `controllers/`: WBC-facing bridges and conversion logic
+- `iphone_gps_autopath/`: iPhone sensor bridge containing code that consumes iPhone GPS + heading data for precise path planning and robot navigation
 - `sim/` or `hw/`: simulation/hardware-specific runners
 - `tests/`: unit and integration tests for command handling
 - `scripts/`: local run/debug utilities
@@ -55,6 +56,10 @@ When contributing:
 - keep PRs small and focused
 - include a short experiment report in the PR description
 - attach logs/plots if interface behavior changed
+
+## Robot Sensing Context
+
+`iphone_gps_autopath/` is used as the robot’s context source for localization-aware planning. It contains the client path that receives iPhone GPS and heading data, then feeds this sensor information into path planning logic used by the rest of the system.
 
 ## License
 

@@ -1,10 +1,14 @@
 """SensorLog UDP reader with optional waypoint navigation commands."""
 
+import atexit
 import csv
 import json
 import math
+import select
 import socket
 import sys
+import termios
+import tty
 
 # SensorLog stream settings
 SENSORLOG_IP = "172.20.10.3"  # informational only (UDP source is the phone)
@@ -67,6 +71,9 @@ header = None
 route = []
 wp_index = 0
 last_print_wp = -1
+captured_waypoints = []
+latest_gps = None
+term_state = None
 
 
 def parse_csv(line):
@@ -166,6 +173,53 @@ def pretty_print(sample):
             print(f"{label:20}: {value}")
 
 
+def enable_raw_mode():
+    if not sys.stdin.isatty():
+        return None
+    try:
+        state = termios.tcgetattr(sys.stdin.fileno())
+        tty.setcbreak(sys.stdin.fileno())
+        return state
+    except Exception:
+        return None
+
+
+def disable_raw_mode(state):
+    if state is None:
+        return
+    try:
+        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, state)
+    except Exception:
+        pass
+
+
+def read_key():
+    if not sys.stdin.isatty():
+        return None
+    ready, _, _ = select.select([sys.stdin], [], [], 0.0)
+    if not ready:
+        return None
+    return sys.stdin.read(1)
+
+
+def capture_waypoint():
+    global latest_gps, captured_waypoints
+    if latest_gps is None:
+        print("No valid GPS fix available to capture.")
+        return
+    lat, lon = latest_gps
+    captured_waypoints.append({"lat": lat, "lon": lon})
+    print(f"Captured waypoint #{len(captured_waypoints)}: lat={lat:.6f}, lon={lon:.6f}")
+
+
+def dump_captured_waypoints_and_exit():
+    print("\nCaptured GPS waypoints:")
+    print(json.dumps({"waypoints": captured_waypoints}, indent=2))
+    print(f"Total captured: {len(captured_waypoints)}")
+    disable_raw_mode(term_state)
+    sys.exit(0)
+
+
 def haversine_m(lat1, lon1, lat2, lon2):
     radius = 6371000.0
     p1 = math.radians(lat1)
@@ -231,15 +285,30 @@ if len(sys.argv) >= 2:
 if not route:
     print("No route loaded. Showing sensor stream only.")
 
+print("Controls: press 'w' to save current GPS point, 'q' to print captured waypoints and quit.")
+
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(("0.0.0.0", SENSORLOG_PORT))
+sock.settimeout(0.2)
+term_state = enable_raw_mode()
+atexit.register(disable_raw_mode, term_state)
 
 print("Listening...")
 print(f"SensorLog remote server: {SENSORLOG_IP}:{SENSORLOG_PORT}")
 print(f"UDP listen: 0.0.0.0:{SENSORLOG_PORT}")
 
 while True:
-    data, addr = sock.recvfrom(MAX_BYTES)
+    key = read_key()
+    if key == "w":
+        capture_waypoint()
+    elif key == "q":
+        dump_captured_waypoints_and_exit()
+
+    try:
+        data, addr = sock.recvfrom(MAX_BYTES)
+    except socket.timeout:
+        continue
+
     text = data.decode("utf-8", errors="ignore").strip()
     if not text:
         continue
@@ -283,6 +352,14 @@ while True:
 
         lat = to_float(lookup_field(sample, ["locationLatitude", "latitude", "lat"]))
         lon = to_float(lookup_field(sample, ["locationLongitude", "longitude", "lon"]))
+        if lat is not None and lon is not None:
+            latest_gps = (lat, lon)
+
+        key = read_key()
+        if key == "w":
+            capture_waypoint()
+        elif key == "q":
+            dump_captured_waypoints_and_exit()
 
         if not route:
             pretty_print(sample)

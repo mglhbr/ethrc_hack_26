@@ -39,6 +39,32 @@ FULL_HEADER = [
     "locationHeadingAccuracy",
 ]
 
+UNBIASED_MOTION_HEADER = [
+    "motionTimestamp_sinceReboot",
+    "motionYaw",
+    "motionRoll",
+    "motionPitch",
+    "motionRotationRateX",
+    "motionRotationRateY",
+    "motionRotationRateZ",
+    "motionUserAccelerationX",
+    "motionUserAccelerationY",
+    "motionUserAccelerationZ",
+    "motionAttitudeReferenceFrame",
+    "motionQuaternionX",
+    "motionQuaternionY",
+    "motionQuaternionZ",
+    "motionQuaternionW",
+    "motionGravityX",
+    "motionGravityY",
+    "motionGravityZ",
+    "motionMagneticFieldX",
+    "motionMagneticFieldY",
+    "motionMagneticFieldZ",
+    "motionHeading",
+    "motionMagneticFieldCalibrationAccuracy",
+]
+
 HEADING_ONLY_HEADER = [
     "loggingTime",
     "loggingSample",
@@ -51,6 +77,9 @@ HEADING_ONLY_HEADER = [
     "locationHeadingAccuracy",
 ]
 
+FULL_HEADER_WITH_MOTION = FULL_HEADER + UNBIASED_MOTION_HEADER
+HEADING_ONLY_WITH_MOTION = HEADING_ONLY_HEADER + UNBIASED_MOTION_HEADER
+
 DISPLAY_FIELDS = [
     ("locationTimestamp_since1970", "locationTimestamp(s)"),
     ("locationLatitude", "lat"),
@@ -61,6 +90,10 @@ DISPLAY_FIELDS = [
     ("locationTrueHeading", "trueHeading(°)"),
     ("locationMagneticHeading", "magHeading(°)"),
     ("locationHeadingAccuracy", "headingAcc(°)"),
+    ("motionHeading", "motionHeading(°)"),
+    ("motionPitch", "motionPitch(rad)"),
+    ("motionRoll", "motionRoll(rad)"),
+    ("motionYaw", "motionYaw(rad)"),
 ]
 
 header = None
@@ -118,9 +151,14 @@ def lookup_field(sample, names):
 
 def infer_header(values):
     if looks_like_timestamp(values[0]) and len(values) > 1 and is_int_like(values[1]):
-        if len(values) <= len(FULL_HEADER):
-            if len(values) >= len(HEADING_ONLY_HEADER):
-                return FULL_HEADER[: len(values)]
+        for candidate in (
+            HEADING_ONLY_WITH_MOTION,
+            HEADING_ONLY_HEADER,
+            FULL_HEADER_WITH_MOTION,
+            FULL_HEADER,
+        ):
+            if len(values) == len(candidate):
+                return candidate
         return None
     return None
 
@@ -272,7 +310,11 @@ while True:
         if sample is None:
             continue
 
-        heading = to_float(lookup_field(sample, ["locationTrueHeading", "locationheading", "trueHeading"]))
+        heading = to_float(
+            lookup_field(sample, ["locationTrueHeading", "locationheading", "trueHeading"])
+        )
+        if heading is None:
+            heading = to_float(lookup_field(sample, ["motionHeading"]))
         if heading is None or math.isnan(heading):
             heading = to_float(lookup_field(sample, ["locationCourse", "course"]))
         if heading is None:

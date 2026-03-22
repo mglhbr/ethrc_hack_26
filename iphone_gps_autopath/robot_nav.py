@@ -40,6 +40,32 @@ FULL_HEADER = [
     "locationHeadingAccuracy",
 ]
 
+UNBIASED_MOTION_HEADER = [
+    "motionTimestamp_sinceReboot",
+    "motionYaw",
+    "motionRoll",
+    "motionPitch",
+    "motionRotationRateX",
+    "motionRotationRateY",
+    "motionRotationRateZ",
+    "motionUserAccelerationX",
+    "motionUserAccelerationY",
+    "motionUserAccelerationZ",
+    "motionAttitudeReferenceFrame",
+    "motionQuaternionX",
+    "motionQuaternionY",
+    "motionQuaternionZ",
+    "motionQuaternionW",
+    "motionGravityX",
+    "motionGravityY",
+    "motionGravityZ",
+    "motionMagneticFieldX",
+    "motionMagneticFieldY",
+    "motionMagneticFieldZ",
+    "motionHeading",
+    "motionMagneticFieldCalibrationAccuracy",
+]
+
 HEADING_ONLY_HEADER = [
     "loggingTime",
     "loggingSample",
@@ -51,6 +77,9 @@ HEADING_ONLY_HEADER = [
     "locationMagneticHeading",
     "locationHeadingAccuracy",
 ]
+
+FULL_HEADER_WITH_MOTION = FULL_HEADER + UNBIASED_MOTION_HEADER
+HEADING_ONLY_WITH_MOTION = HEADING_ONLY_HEADER + UNBIASED_MOTION_HEADER
 
 header = None
 route = []
@@ -95,9 +124,15 @@ def looks_like_header(values):
 
 def infer_header(values):
     if len(values) >= len(HEADING_ONLY_HEADER) and looks_like_timestamp(values[0]) and is_int_like(values[1]):
-        if len(values) >= len(FULL_HEADER):
-            return FULL_HEADER[: len(values)]
-        return HEADING_ONLY_HEADER[: len(values)]
+        for candidate in (
+            HEADING_ONLY_WITH_MOTION,
+            HEADING_ONLY_HEADER,
+            FULL_HEADER_WITH_MOTION,
+            FULL_HEADER,
+        ):
+            if len(values) == len(candidate):
+                return candidate
+        return None
     return None
 
 
@@ -278,6 +313,8 @@ while True:
             continue
 
         heading = to_float(get_field(sample, ["locationTrueHeading", "locationtrueheading"]))
+        if heading is None:
+            heading = to_float(get_field(sample, ["motionHeading"]))
         if heading is None:
             heading = to_float(get_field(sample, ["locationCourse", "course"]))
         if heading is None:

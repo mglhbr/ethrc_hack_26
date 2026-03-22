@@ -117,9 +117,15 @@ def lookup_field(sample, names):
 
     normalized_map = {normalize_field_name(k): v for k, v in sample.items()}
     for candidate in names:
-        value = normalized_map.get(normalize_field_name(candidate))
-        if value is not None:
-            return value
+        candidate_norm = normalize_field_name(candidate)
+        direct = normalized_map.get(candidate_norm)
+        if direct is not None:
+            return direct
+        if not candidate_norm or len(candidate_norm) < 6:
+            continue
+        for key, value in normalized_map.items():
+            if key.startswith(candidate_norm) or candidate_norm.startswith(key):
+                return value
     return None
 
 
@@ -199,7 +205,8 @@ def read_key():
     ready, _, _ = select.select([sys.stdin], [], [], 0.0)
     if not ready:
         return None
-    return sys.stdin.read(1)
+    key = sys.stdin.read(1)
+    return key.lower() if key else None
 
 
 def capture_waypoint():
@@ -341,19 +348,28 @@ while True:
         if sample is None:
             continue
 
-        heading = to_float(lookup_field(sample, ["locationTrueHeading", "locationheading", "trueHeading"]))
-        if heading is None or math.isnan(heading):
-            heading = to_float(lookup_field(sample, ["locationCourse", "course"]))
-        if heading is None:
-            print("Waiting for valid heading.")
-            pretty_print(sample)
-            continue
-        heading = norm_angle(heading)
-
         lat = to_float(lookup_field(sample, ["locationLatitude", "latitude", "lat"]))
         lon = to_float(lookup_field(sample, ["locationLongitude", "longitude", "lon"]))
         if lat is not None and lon is not None:
             latest_gps = (lat, lon)
+            key = read_key()
+            if key == "w":
+                capture_waypoint()
+            elif key == "q":
+                dump_captured_waypoints_and_exit()
+
+        heading = to_float(lookup_field(sample, ["locationTrueHeading", "locationheading", "trueHeading"]))
+        if heading is None or math.isnan(heading):
+            heading = to_float(lookup_field(sample, ["locationCourse", "course"]))
+        if heading is None:
+            if not route:
+                pretty_print(sample)
+                print("Current heading: unavailable")
+            else:
+                print("Waiting for valid heading.")
+                pretty_print(sample)
+            continue
+        heading = norm_angle(heading)
 
         key = read_key()
         if key == "w":

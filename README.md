@@ -49,6 +49,17 @@ As you implement, organize code around clear boundaries:
 - Treat safety checks (joint limits, contact assumptions, emergency stop pathways) as first-class requirements.
 - Record observed behavior and timing metrics with each experiment.
 
+## Waypoint Capture Utility
+
+- `iphone_gps_autopath/waypoint_logger.py`: run in a separate terminal for reliable interactive capture while streaming SensorLog UDP.
+- Controls:
+  - `w`: capture current GPS coordinate
+  - `q`: print captured waypoints and stop
+- Optional output:
+  ```bash
+  python iphone_gps_autopath/waypoint_logger.py 505 my_waypoints.json
+  ```
+
 ## Collaboration
 
 When contributing:
